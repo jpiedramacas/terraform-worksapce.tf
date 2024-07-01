@@ -1,33 +1,9 @@
-## Práctica Avanzada de Terraform: Trabajar con Múltiples Workspaces en AWS
+# Migración de Terraform State de Local a Remoto (S3)
 
-### Introducción
+Este documento te guiará a través de la migración del estado de Terraform desde un archivo local a un backend remoto utilizando Amazon S3. La configuración se basa en un archivo `main.tf` que define recursos para diferentes entornos (`dev` y `prod`).
 
-En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de Terraform en AWS. Los workspaces de Terraform permiten gestionar diferentes entornos (como desarrollo, prueba y producción) dentro de la misma configuración de Terraform.
 
-### Requisitos Previos
-
-1. **Cuenta de AWS**: Asegúrate de tener una cuenta de AWS con los permisos adecuados para crear y gestionar recursos.
-2. **AWS CLI Configurado**: La AWS CLI debe estar instalada y configurada con las credenciales adecuadas.
-3. **Terraform Instalado**: Terraform debe estar instalado en tu máquina. Puedes descargarlo desde [aquí](https://www.terraform.io/downloads).
-
-### Sección 1: Trabajar con Múltiples Terraform Workspaces en AWS
-
-#### Paso 1: Configuración Inicial
-
-1. **Instalar Terraform**: Si aún no tienes Terraform instalado, sigue las instrucciones en el [sitio oficial de Terraform](https://www.terraform.io/downloads) para instalarlo.
-
-2. **Configurar AWS CLI**: Asegúrate de que la AWS CLI esté configurada correctamente con las credenciales adecuadas. Puedes verificar esto ejecutando `aws configure` y proporcionando tus credenciales de AWS.
-
-3. **Crear un Directorio de Trabajo**: Crea un nuevo directorio para tu proyecto Terraform y accede a él.
-
-    ```bash
-    mkdir terraform-multiple-workspaces
-    cd terraform-multiple-workspaces
-    ```
-
-#### Paso 2: Definir la Configuración de Terraform
-
-1. **Crear un archivo de configuración principal (`main.tf`)**: Este archivo contendrá la configuración para los recursos de AWS, incluyendo una instancia EC2 y una base de datos RDS. Define los valores locales y los recursos que dependerán del workspace activo.
+## Contenido de `main.tf`
 
 ```hcl
 provider "aws" {
@@ -42,35 +18,25 @@ locals {
   db_allocated_storage= terraform.workspace == "prod" ? 20 : 10
 }
 
-# Recurso para la instancia EC2
 resource "aws_instance" "example" {
-  ami             = "ami-01b799c439fd5516a"  # Amazon Linux 2 AMI
-  instance_type   = local.instance_type
+  ami           = "ami-01b799c439fd5516a"
+  instance_type = local.instance_type
 
   tags = {
     Name        = "${local.environment}-example-instance"
     Environment = local.environment
   }
-
-  # Configuración de la red (ejemplo: se puede ajustar según tus necesidades)
-  vpc_security_group_ids = ["sg-12345678"]  # ID del grupo de seguridad de la VPC
-  subnet_id              = "subnet-abcdef"  # ID de la subred pública
 }
 
-# Recurso para la instancia de base de datos RDS
 resource "aws_db_instance" "example" {
   allocated_storage    = local.db_allocated_storage
   engine               = "mysql"
   engine_version       = "8.0.35"
   instance_class       = local.db_instance_class
-  name                 = "exampledb"
+  db_name              = "exampledb"
   username             = "admin"
   password             = "password"
   parameter_group_name = "default.mysql8.0"
-
-  # Configuración de la red y seguridad para la instancia RDS
-  vpc_security_group_ids = ["sg-87654321"]  # ID del grupo de seguridad de la VPC
-  subnet_group_name      = "my-db-subnet-group"
 
   tags = {
     Name        = "${local.environment}-example-db"
@@ -79,138 +45,146 @@ resource "aws_db_instance" "example" {
 }
 ```
 
-2. **Inicializar Terraform**: Inicializa tu configuración de Terraform para preparar el directorio de trabajo.
+---
 
-    ```bash
-    terraform init
-    ```
+## Paso 1: Crear y administrar recursos localmente
 
-#### Paso 3: Crear y Cambiar entre Workspaces
+### 1.1 Inicializar Terraform
 
-1. **Listar Workspaces Disponibles**: Verifica los workspaces disponibles en tu proyecto.
+Primero, inicializa Terraform en tu directorio de trabajo. Esto descarga los plugins necesarios y configura el entorno.
 
-    ```bash
-    terraform workspace list
-    ```
+```bash
+terraform init
+```
 
-2. **Crear Nuevos Workspaces**: Crea workspaces para `development` y `prod`.
+### 1.2 Seleccionar el entorno de trabajo (Workspace)
 
-    ```bash
-    terraform workspace new development
-    terraform workspace new prod
-    ```
+Terraform permite gestionar múltiples entornos (`workspaces`). Para este ejemplo, utilizaremos los workspaces `dev` y `prod`.
 
-3. **Cambiar a un Workspace Existente**: Cambia entre los workspaces según sea necesario.
+Crea y selecciona el workspace `dev`:
 
-    ```bash
-    terraform workspace select development
-    terraform workspace select prod
-    ```
+```bash
+terraform workspace new dev
+```
 
-#### Paso 4: Desplegar Recursos en Diferentes Workspaces
+Para cambiar al workspace `prod` en el futuro, puedes usar:
 
-1. **Aplicar Configuración en el Workspace `development`**:
+```bash
+terraform workspace select prod
+```
 
-    ```bash
-    terraform workspace select development
-    terraform apply -auto-approve
-    ```
+### 1.3 Aplicar la configuración
 
-    Verifica los recursos creados en la consola de AWS, asegurándote de que una instancia EC2 `t2.micro` y una base de datos RDS `db.t2.micro` estén presentes.
+Con el workspace `dev` seleccionado, aplica la configuración para crear los recursos definidos:
 
-2. **Aplicar Configuración en el Workspace `prod`**:
+```bash
+terraform apply
+```
 
-    ```bash
-    terraform workspace select prod
-    terraform apply -auto-approve
-    ```
+Terraform pedirá confirmación antes de aplicar los cambios. Ingresa `yes` para continuar.
 
-    Verifica los recursos creados en la consola de AWS, asegurándote de que una instancia EC2 `t2.small` y una base de datos RDS `db.t2.medium` estén presentes.
+---
 
-#### Paso 5: Verificar y Administrar Workspaces
+## Paso 2: Crear un bucket de S3 manualmente
 
-1. **Verificar los Recursos**: Navega a la consola de AWS y verifica que los recursos se hayan creado correctamente en cada workspace.
+### 2.1 Crear el bucket S3
 
-2. **Renombrar un Workspace**: Si necesitas renombrar un workspace, sigue estos pasos detallados:
+Accede a la consola de AWS y navega a S3 para crear un nuevo bucket. Sigue estos pasos:
 
-    - **Selecciona el Workspace que quieres renombrar**:
+1. Abre la [Consola de Amazon S3](https://s3.console.aws.amazon.com/s3/).
+2. Haz clic en "Create bucket".
+3. Asigna un nombre único al bucket y selecciona la región `us-east-1`.
+4. Deja las configuraciones por defecto o personalízalas según tus necesidades.
+5. Haz clic en "Create bucket" para finalizar.
 
-        ```bash
-        terraform workspace select old-name
-        ```
+### 2.2 Configurar la política de bucket (opcional)
 
-    - **Extrae el estado actual del workspace**:
+Si planeas que múltiples usuarios o servicios accedan al bucket, configura una política que permita el acceso necesario.
 
-        ```bash
-        terraform state pull >old-name.tfstate
-        ```
+Ejemplo de política de bucket que permite acceso completo al bucket:
 
-    - **Crea un nuevo Workspace con el nuevo nombre**:
+```json
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": "*",
+      "Action": "s3:*",
+      "Resource": [
+        "arn:aws:s3:::nombre-de-tu-bucket",
+        "arn:aws:s3:::nombre-de-tu-bucket/*"
+      ]
+    }
+  ]
+}
+```
 
-        ```bash
-        terraform workspace new new-name
-        ```
+Ajusta `"Principal"` y `"Action"` según tus necesidades de seguridad.
 
-    - **Empuja el estado al nuevo workspace**:
+---
 
-        ```bash
-        terraform state push old-name.tfstate
-        ```
+## Paso 3: Migrar el estado de Terraform de local a remoto
 
-    - **Verifica el estado del nuevo workspace**:
+### 3.1 Configurar el backend en Terraform
 
-        ```bash
-        terraform show
-        ```
+Edita tu archivo `main.tf` para especificar que Terraform debe usar el bucket de S3 como backend. Agrega el siguiente bloque de configuración al principio del archivo:
 
-    - **Elimina el viejo workspace**:
+```hcl
+terraform {
+  backend "s3" {
+    bucket = "nombre-de-tu-bucket"
+    key    = "ruta/a/tu/terraform.tfstate"
+    region = "us-east-1"
+  }
+}
+```
 
-        ```bash
-        terraform workspace delete -force old-name
-        ```
+Reemplaza `nombre-de-tu-bucket` con el nombre del bucket que creaste y ajusta la `key` a la ruta deseada dentro del bucket donde se almacenará el archivo de estado.
 
-    - Cada comando realiza lo siguiente:
-        - `terraform workspace select old-name`: Cambia al workspace existente que deseas renombrar.
-        - `terraform state pull >old-name.tfstate`: Descarga el estado actual del workspace en un archivo.
-        - `terraform workspace new new-name`: Crea un nuevo workspace con el nombre deseado.
-        - `terraform state push old-name.tfstate`: Sube el estado del viejo workspace al nuevo.
-        - `terraform show`: Verifica que el estado en el nuevo workspace es correcto.
-        - `terraform workspace delete -force old-name`: Elimina el viejo workspace.
+### 3.2 Migrar el estado
 
-#### Paso 6: Limpieza de Recursos
+Ejecuta el siguiente comando para iniciar la migración del estado de local a remoto:
 
-1. **Destruir Recursos en un Workspace**: Antes de eliminar un workspace, debes destruir todos los recursos asociados con él para evitar problemas futuros.
+```bash
+terraform init -migrate-state
+```
 
-    ```bash
-    terraform workspace select development
-    terraform destroy -auto-approve
-    ```
+Terraform te preguntará si deseas migrar el estado. Confirma ingresando `yes`.
 
-2. **Eliminar el Workspace**: Una vez que todos los recursos han sido destruidos, puedes proceder a eliminar el workspace.
+---
 
-    ```bash
-    terraform workspace select default
-    terraform workspace delete development
-    ```
+## Paso 4: Verificar la migración
 
-    Si intentas eliminar un workspace que todavía tiene recursos asociados, recibirás un error. Usa la opción `-force` si estás seguro de que quieres eliminar el workspace y manejar manualmente cualquier recurso residual:
+### 4.1 Comprobar el estado remoto
 
-    ```bash
-    terraform workspace delete -force development
-    ```
+Después de la migración, verifica que el archivo `terraform.tfstate` ahora está en tu bucket de S3. Accede a la consola de S3 y navega a la ruta especificada en el bloque `backend` de Terraform.
 
-3. **Eliminar todos los Workspaces**:
+### 4.2 Confirmar la gestión de recursos
 
-    ```bash
-    terraform workspace select default
-    terraform workspace delete prod
-    terraform workspace delete dev
-    ```
+Ejecuta `terraform plan` para asegurarte de que Terraform está utilizando el estado remoto correctamente:
 
-### Etiquetas de Recursos
+```bash
+terraform plan
+```
 
-- **Etiqueta Name**:
-  - En el workspace `prod`: `prod-example-instance`
-  - En el workspace `dev`: `dev-example-instance`
-- **Etiqueta Environment**:
-  - En ambos workspaces (`prod` y `dev`): El valor es el nombre del workspace (es decir, `prod` o `dev`).
+Deberías ver que Terraform no intenta recrear los recursos, ya que ahora está gestionando el estado desde S3.
+
+### 4.3 Aplicar cambios
+
+Si todo está correcto, intenta aplicar un cambio menor en tu configuración para verificar la gestión continua del estado remoto.
+
+Por ejemplo, cambia el tipo de instancia en `main.tf`:
+
+```hcl
+locals {
+  environment         = terraform.workspace
+  bucket_name         = terraform.workspace == "prod" ? "prod-example-bucket" : "dev-example-bucket"
+  instance_type       = terraform.workspace == "prod" ? "t2.medium" : "t3.micro" # Cambia t2.small a t2.medium
+  db_instance_class   = terraform.workspace == "prod" ? "db.t3.medium" : "db.t3.micro"
+  db_allocated_storage= terraform.workspace == "prod" ? 20 : 10
+}
+```
+
+Ejecuta `terraform apply` nuevamente y confirma los cambios. Esto validará que el estado remoto se está utilizando correctamente para aplicar los cambios.
+
