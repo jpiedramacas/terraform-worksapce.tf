@@ -1,18 +1,24 @@
-## Ejercicio Final: Extender la Configuración de Terraform para Incluir una Base de Datos RDS
+## Práctica Avanzada de Terraform: Trabajar con Múltiples Workspaces en AWS
 
-### Desafío
+### Introducción
 
-En este ejercicio, extenderás la configuración de Terraform para incluir una base de datos RDS en cada workspace, con diferentes tamaños según el entorno (`prod` y `dev`). Esto te permitirá practicar la creación y gestión de recursos más complejos en múltiples workspaces.
+En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de Terraform en AWS. Los workspaces de Terraform permiten gestionar diferentes entornos (como desarrollo, prueba y producción) dentro de la misma configuración de Terraform.
 
-### Objetivo
+### Requisitos Previos
 
-El objetivo es practicar la creación y gestión de recursos más complejos en múltiples workspaces, adaptando la configuración según el entorno.
+1. **Cuenta de AWS**: Asegúrate de tener una cuenta de AWS con los permisos adecuados para crear y gestionar recursos.
+2. **AWS CLI Configurado**: La AWS CLI debe estar instalada y configurada con las credenciales adecuadas.
+3. **Terraform Instalado**: Terraform debe estar instalado en tu máquina. Puedes descargarlo desde [aquí](https://www.terraform.io/downloads).
 
-### Pasos Detallados
+### Sección 1: Trabajar con Múltiples Terraform Workspaces en AWS
 
 #### Paso 1: Configuración Inicial
 
-1. **Crear un Directorio de Trabajo**: Crea un nuevo directorio para tu proyecto Terraform.
+1. **Instalar Terraform**: Si aún no tienes Terraform instalado, sigue las instrucciones en el [sitio oficial de Terraform](https://www.terraform.io/downloads) para instalarlo.
+
+2. **Configurar AWS CLI**: Asegúrate de que la AWS CLI esté configurada correctamente con las credenciales adecuadas. Puedes verificar esto ejecutando `aws configure` y proporcionando tus credenciales de AWS.
+
+3. **Crear un Directorio de Trabajo**: Crea un nuevo directorio para tu proyecto Terraform y accede a él.
 
     ```bash
     mkdir terraform-multiple-workspaces
@@ -21,7 +27,7 @@ El objetivo es practicar la creación y gestión de recursos más complejos en m
 
 #### Paso 2: Definir la Configuración de Terraform
 
-1. **Crear un archivo de configuración principal (`main.tf`)**: Este archivo contendrá la configuración para los recursos de AWS, incluyendo la instancia EC2 y la base de datos RDS.
+1. **Crear un archivo de configuración principal (`main.tf`)**: Este archivo contendrá la configuración para los recursos de AWS, incluyendo una instancia EC2 y una base de datos RDS. Define los valores locales y los recursos que dependerán del workspace activo.
 
     ```hcl
     provider "aws" {
@@ -29,11 +35,11 @@ El objetivo es practicar la creación y gestión de recursos más complejos en m
     }
 
     locals {
-      environment   = terraform.workspace
-      bucket_name   = terraform.workspace == "prod" ? "prod-example-bucket" : "dev-example-bucket"
-      instance_type = terraform.workspace == "prod" ? "t2.small" : "t2.micro"
-      db_instance_class = terraform.workspace == "prod" ? "db.t2.medium" : "db.t2.micro"
-      db_allocated_storage = terraform.workspace == "prod" ? 20 : 10
+      environment         = terraform.workspace
+      bucket_name         = terraform.workspace == "prod" ? "prod-example-bucket" : "dev-example-bucket"
+      instance_type       = terraform.workspace == "prod" ? "t2.small" : "t2.micro"
+      db_instance_class   = terraform.workspace == "prod" ? "db.t2.medium" : "db.t2.micro"
+      db_allocated_storage= terraform.workspace == "prod" ? 20 : 10
     }
 
     resource "aws_instance" "example" {
@@ -77,7 +83,7 @@ El objetivo es practicar la creación y gestión de recursos más complejos en m
     terraform workspace list
     ```
 
-2. **Crear un Nuevo Workspace**: Crea workspaces para `development` y `prod`.
+2. **Crear Nuevos Workspaces**: Crea workspaces para `development` y `prod`.
 
     ```bash
     terraform workspace new development
@@ -198,7 +204,3 @@ El objetivo es practicar la creación y gestión de recursos más complejos en m
   - En el workspace `dev`: `dev-example-instance`
 - **Etiqueta Environment**:
   - En ambos workspaces (`prod` y `dev`): El valor es el nombre del workspace (es decir, `prod` o `dev`).
-
-### Ejercicio Final Completado
-
-Has extendido la configuración de Terraform para incluir una base de datos RDS en cada workspace con diferentes tamaños según el entorno (`prod` y `dev`). Esto te permite practicar la creación y gestión de recursos más complejos en múltiples workspaces, asegurando que cada entorno esté adecuadamente aislado y configurado.
