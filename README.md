@@ -1,6 +1,7 @@
 # Guía Completa para Proteger Variables Sensibles en Terraform
 
 En esta guía, aprenderás cómo proteger la información sensible en Terraform. Es común que necesites configurar infraestructura usando información sensible como nombres de usuario, contraseñas, tokens de API o Información Personalmente Identificable (PII). Terraform proporciona varias características para evitar que estos datos se expongan accidentalmente en la salida de la CLI, los registros o el control de versiones.
+[Oficial](https://developer.hashicorp.com/terraform/tutorials/configuration-language/sensitive-variables)
 
 ## Prerrequisitos
 
