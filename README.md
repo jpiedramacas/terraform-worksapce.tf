@@ -14,17 +14,9 @@ En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de 
 
 ### Paso 1: Configuración Inicial
 
-1. **Instalar Terraform**: Asegúrate de tener Terraform instalado. Puedes descargarlo desde [aquí](https://www.terraform.io/downloads). Siga las instrucciones de instalación para tu sistema operativo.
-
-2. **Configurar AWS CLI**: Configura la AWS CLI con las credenciales adecuadas. Ejecuta el comando:
-
-    ```bash
-    aws configure
-    ```
-
-    Proporciona tu clave de acceso, clave secreta, región predeterminada (por ejemplo, `us-east-1`) y formato de salida (por ejemplo, `json`).
-
-3. **Crear un Directorio de Trabajo**: Crea un nuevo directorio para tu proyecto Terraform. Este directorio contendrá todos los archivos de configuración necesarios.
+1. **Instalar Terraform**: Asegúrate de tener Terraform instalado. Puedes descargarlo desde [aquí](https://www.terraform.io/downloads).
+2. **Configurar AWS CLI**: Configura la AWS CLI con las credenciales adecuadas usando el comando `aws configure`.
+3. **Crear un Directorio de Trabajo**: Crea un nuevo directorio para tu proyecto Terraform.
 
     ```bash
     mkdir terraform-multiple-workspaces
@@ -33,9 +25,7 @@ En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de 
 
 ### Paso 2: Definir la Configuración de Terraform
 
-4. **Crear un archivo de configuración principal (`main.tf`)**: Este archivo define los recursos que se van a crear en AWS y utiliza variables locales para configurar los recursos según el workspace.
-
-    Crea un archivo llamado `main.tf` con el siguiente contenido:
+4. **Crear un archivo de configuración principal (`main.tf`)**: 
 
     ```hcl
     provider "aws" {
@@ -59,12 +49,7 @@ En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de 
     }
     ```
 
-    En este archivo:
-    - `provider "aws"` especifica que usaremos AWS como proveedor y establece la región en `us-east-1`.
-    - `locals` define variables locales que cambian según el workspace actual (`environment`, `bucket_name`, `instance_type`).
-    - `resource "aws_instance" "example"` define una instancia EC2 con una AMI específica y un tipo de instancia que varía según el workspace.
-
-5. **Inicializar Terraform**: Inicializa el directorio de trabajo de Terraform. Esto descarga los plugins necesarios para interactuar con AWS.
+5. **Inicializar Terraform**:
 
     ```bash
     terraform init
@@ -72,23 +57,19 @@ En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de 
 
 ### Paso 3: Crear y Cambiar entre Workspaces
 
-6. **Listar Workspaces Disponibles**: Lista todos los workspaces disponibles en el directorio actual.
+6. **Listar Workspaces Disponibles**:
 
     ```bash
     terraform workspace list
     ```
 
-    Deberías ver al menos el workspace `default`.
-
-7. **Crear un Nuevo Workspace**: Crea un nuevo workspace llamado `development`.
+7. **Crear un Nuevo Workspace**:
 
     ```bash
     terraform workspace new development
     ```
 
-    Esto crea un nuevo workspace y cambia el contexto a `development`.
-
-8. **Cambiar a un Workspace Existente**: Cambia al workspace `default`.
+8. **Cambiar a un Workspace Existente**:
 
     ```bash
     terraform workspace select default
@@ -96,54 +77,120 @@ En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de 
 
 ### Paso 4: Desplegar Recursos en Diferentes Workspaces
 
-9. **Aplicar Configuración en el Workspace `development`**: Selecciona el workspace `development` y aplica la configuración de Terraform.
+9. **Aplicar Configuración en el Workspace `development`**:
 
     ```bash
     terraform workspace select development
     terraform apply -auto-approve
     ```
 
-    Esto creará los recursos definidos en `main.tf` en el workspace `development`. Verifica los recursos creados en la consola de AWS, asegurándote de que una instancia EC2 `t2.micro` esté presente.
+    Verifica los recursos creados en la consola de AWS, asegurándote de que una instancia EC2 `t2.micro` esté presente.
 
-10. **Aplicar Configuración en el Workspace `prod`**: Selecciona el workspace `prod` y aplica la configuración de Terraform.
+10. **Aplicar Configuración en el Workspace `prod`**:
 
     ```bash
-    terraform workspace new prod
     terraform workspace select prod
     terraform apply -auto-approve
     ```
 
-    Esto creará los recursos definidos en `main.tf` en el workspace `prod`. Verifica los recursos creados en la consola de AWS, asegurándote de que una instancia EC2 `t2.small` esté presente.
+    Verifica los recursos creados en la consola de AWS, asegurándote de que una instancia EC2 `t2.small` esté presente.
 
 ### Paso 5: Administrar Workspaces
 
-11. **Renombrar un Workspace**: Aunque Terraform no permite renombrar directamente un workspace, puedes crear un nuevo workspace y eliminar el antiguo.
+#### Renombrar un Workspace
+
+Terraform no tiene un comando directo para renombrar workspaces, pero puedes lograrlo siguiendo estos pasos:
+
+1. **Selecciona el Workspace que quieres renombrar**:
 
     ```bash
-    terraform workspace new staging
+    terraform workspace select old-name
+    ```
+
+2. **Extrae el estado actual del workspace**:
+
+    ```bash
+    terraform state pull >old-name.tfstate
+    ```
+
+3. **Crea un nuevo Workspace con el nuevo nombre**:
+
+    ```bash
+    terraform workspace new new-name
+    ```
+
+4. **Empuja el estado al nuevo workspace**:
+
+    ```bash
+    terraform state push old-name.tfstate
+    ```
+
+5. **Verifica el estado del nuevo workspace**:
+
+    ```bash
+    terraform show
+    ```
+
+6. **Elimina el viejo workspace**:
+
+    ```bash
+    terraform workspace delete -force old-name
+    ```
+
+Cada comando realiza lo siguiente:
+- `terraform workspace select old-name`: Cambia al workspace existente que deseas renombrar.
+- `terraform state pull >old-name.tfstate`: Descarga el estado actual del workspace en un archivo.
+- `terraform workspace new new-name`: Crea un nuevo workspace con el nombre deseado.
+- `terraform state push old-name.tfstate`: Sube el estado del viejo workspace al nuevo.
+- `terraform show`: Verifica que el estado en el nuevo workspace es correcto.
+- `terraform workspace delete -force old-name`: Elimina el viejo workspace.
+
+#### Eliminar un Workspace
+
+1. **Destruir Recursos en el Workspace**: Antes de eliminar un workspace, debes destruir todos los recursos asociados con él para evitar problemas futuros.
+
+    ```bash
+    terraform workspace select development
+    terraform destroy -auto-approve
+    ```
+
+    Esto destruirá todos los recursos creados en el workspace `development`.
+
+2. **Eliminar el Workspace**: Una vez que todos los recursos han sido destruidos, puedes proceder a eliminar el workspace.
+
+    ```bash
     terraform workspace select default
     terraform workspace delete development
     ```
 
-    Esto crea un nuevo workspace `staging`, cambia al workspace `default` y elimina el workspace `development`.
+    Si intentas eliminar un workspace que todavía tiene recursos asociados, recibirás un error como el siguiente:
 
-12. **Eliminar un Workspace**: No puedes eliminar el workspace actual. Primero, cambia a otro workspace y luego elimina el que deseas.
+    ```plaintext
+    Error: Workspace is not empty
+    Workspace "development" is currently tracking the following resource instances:
+      - aws_instance.example
+
+    Deleting this workspace would cause Terraform to lose track of any associated remote objects, which would then require you to delete them manually outside of Terraform. You should destroy these objects with Terraform before deleting the workspace.
+
+    If you want to delete this workspace anyway, and have Terraform forget about these managed objects, use the -force option to disable this safety check.
+    ```
+
+    Si estás seguro de que quieres eliminar el workspace y manejar manualmente cualquier recurso residual, puedes usar la opción `-force`:
 
     ```bash
-    terraform workspace select default
-    terraform workspace delete staging
+    terraform workspace delete -force development
     ```
 
 ### Paso 6: Limpieza de Recursos
 
-13. **Destruir Recursos en un Workspace**: Destruye todos los recursos en el workspace `prod`.
+13. **Destruir Recursos en un Workspace**:
 
     ```bash
     terraform workspace select prod
     terraform destroy -auto-approve
     ```
 
-14. **Eliminar todos los Workspaces**: Asegúrate de que todos los recursos han sido destruidos antes de eliminar los workspaces.
+14. **Eliminar todos los Workspaces**:
 
     ```bash
     terraform workspace select default
@@ -161,9 +208,7 @@ En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de 
 
 ## Ejercicio Final
 
-### Desafío: Extiende la configuración de Terraform para incluir una base de datos RDS en cada workspace con diferentes tamaños según el entorno (`prod` y `dev`).
-
-1. **Añadir configuración de RDS en `main.tf`**:
+15. **Desafío**: Extiende la configuración de Terraform para incluir una base de datos RDS en cada workspace con diferentes tamaños según el entorno (`prod` y `dev`).
 
     ```hcl
     resource "aws_db_instance" "example" {
@@ -183,30 +228,4 @@ En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de 
     }
     ```
 
-    En este bloque:
-    - `allocated_storage` y `instance_class` varían según el workspace (`prod` o `dev`).
-    - `engine`, `engine_version`, `name`, `username` y `password` son configuraciones específicas de la base de datos RDS.
-
-2. **Aplicar configuración en diferentes workspaces**:
-
-    - **Workspace `dev`**:
-
-        ```bash
-        terraform workspace select dev
-        terraform apply -auto-approve
-        ```
-
-        Verifica que se haya creado una instancia RDS con `10` GB de almacenamiento y clase de instancia `db.t2.micro`.
-
-    - **Workspace `prod`**:
-
-        ```bash
-        terraform workspace select prod
-        terraform apply -auto-approve
-        ```
-
-        Verifica que se haya creado una instancia RDS con `20` GB de almacenamiento y clase de instancia `db.t2.medium`.
-
-### Objetivo
-
-Practicar la creación y gestión de recursos más complejos en múltiples workspaces, adaptando la configuración según el entorno.
+16. **Objetivo**: Practicar la creación y gestión de recursos más complejos en múltiples workspaces, adaptando la configuración según el entorno.
