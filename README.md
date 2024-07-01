@@ -29,45 +29,55 @@ En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de 
 
 1. **Crear un archivo de configuración principal (`main.tf`)**: Este archivo contendrá la configuración para los recursos de AWS, incluyendo una instancia EC2 y una base de datos RDS. Define los valores locales y los recursos que dependerán del workspace activo.
 
-    ```hcl
-    provider "aws" {
-      region = "us-east-1"
-    }
+```hcl
+provider "aws" {
+  region = "us-east-1"
+}
 
-    locals {
-      environment         = terraform.workspace
-      bucket_name         = terraform.workspace == "prod" ? "prod-example-bucket" : "dev-example-bucket"
-      instance_type       = terraform.workspace == "prod" ? "t2.small" : "t2.micro"
-      db_instance_class   = terraform.workspace == "prod" ? "db.t2.medium" : "db.t2.micro"
-      db_allocated_storage= terraform.workspace == "prod" ? 20 : 10
-    }
+locals {
+  environment         = terraform.workspace
+  bucket_name         = terraform.workspace == "prod" ? "prod-example-bucket" : "dev-example-bucket"
+  instance_type       = terraform.workspace == "prod" ? "t2.small" : "t3.micro"
+  db_instance_class   = terraform.workspace == "prod" ? "db.t3.medium" : "db.t3.micro"
+  db_allocated_storage= terraform.workspace == "prod" ? 20 : 10
+}
 
-    resource "aws_instance" "example" {
-      ami           = "ami-01b799c439fd5516a" # Amazon Linux 2 AMI
-      instance_type = local.instance_type
+# Recurso para la instancia EC2
+resource "aws_instance" "example" {
+  ami             = "ami-01b799c439fd5516a"  # Amazon Linux 2 AMI
+  instance_type   = local.instance_type
 
-      tags = {
-        Name        = "${local.environment}-example-instance"
-        Environment = local.environment
-      }
-    }
+  tags = {
+    Name        = "${local.environment}-example-instance"
+    Environment = local.environment
+  }
 
-    resource "aws_db_instance" "example" {
-      allocated_storage    = local.db_allocated_storage
-      engine               = "mysql"
-      engine_version       = "5.7"
-      instance_class       = local.db_instance_class
-      name                 = "exampledb"
-      username             = "admin"
-      password             = "password"
-      parameter_group_name = "default.mysql5.7"
+  # Configuración de la red (ejemplo: se puede ajustar según tus necesidades)
+  vpc_security_group_ids = ["sg-12345678"]  # ID del grupo de seguridad de la VPC
+  subnet_id              = "subnet-abcdef"  # ID de la subred pública
+}
 
-      tags = {
-        Name        = "${local.environment}-example-db"
-        Environment = local.environment
-      }
-    }
-    ```
+# Recurso para la instancia de base de datos RDS
+resource "aws_db_instance" "example" {
+  allocated_storage    = local.db_allocated_storage
+  engine               = "mysql"
+  engine_version       = "8.0.35"
+  instance_class       = local.db_instance_class
+  name                 = "exampledb"
+  username             = "admin"
+  password             = "password"
+  parameter_group_name = "default.mysql8.0"
+
+  # Configuración de la red y seguridad para la instancia RDS
+  vpc_security_group_ids = ["sg-87654321"]  # ID del grupo de seguridad de la VPC
+  subnet_group_name      = "my-db-subnet-group"
+
+  tags = {
+    Name        = "${local.environment}-example-db"
+    Environment = local.environment
+  }
+}
+```
 
 2. **Inicializar Terraform**: Inicializa tu configuración de Terraform para preparar el directorio de trabajo.
 
