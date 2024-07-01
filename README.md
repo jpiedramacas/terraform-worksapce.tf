@@ -1,208 +1,181 @@
-# Práctica Avanzada de Terraform: Trabajar con Múltiples Workspaces en AWS
+# Guía Completa para Proteger Variables Sensibles en Terraform
 
-## Introducción
+En esta guía, aprenderás cómo proteger la información sensible en Terraform. Es común que necesites configurar infraestructura usando información sensible como nombres de usuario, contraseñas, tokens de API o Información Personalmente Identificable (PII). Terraform proporciona varias características para evitar que estos datos se expongan accidentalmente en la salida de la CLI, los registros o el control de versiones.
 
-En esta práctica avanzada, aprenderás a trabajar con múltiples workspaces de Terraform en AWS. Los workspaces de Terraform permiten gestionar diferentes entornos (como desarrollo, prueba y producción) dentro de la misma configuración de Terraform. Esto facilita la administración de recursos aislados por entorno sin duplicar archivos de configuración.
+## Prerrequisitos
 
-## Requisitos Previos
+Antes de comenzar, asegúrate de tener los siguientes elementos:
 
-1. **Cuenta de AWS**: Necesitas una cuenta de AWS con permisos adecuados para crear y gestionar recursos.
-2. **AWS CLI**: Asegúrate de tener la AWS CLI instalada y configurada.
-3. **Terraform**: Asegúrate de tener Terraform instalado en tu máquina.
+- **Terraform v1.2+** instalado localmente.
+- **Una cuenta de AWS** con credenciales locales configuradas para su uso con Terraform.
+- **CLI de Git** instalada.
 
-## Sección 1: Trabajar con Múltiples Terraform Workspaces en AWS
+> **Nota**: Parte de la infraestructura en este tutorial puede no calificar para el nivel gratuito de AWS. Destruye la infraestructura al finalizar el tutorial para evitar cargos innecesarios. No somos responsables de ningún cargo que puedas incurrir.
 
-### Paso 1: Configuración Inicial
+## Paso 1: Crear la Infraestructura
 
-1. **Instalar Terraform**: Asegúrate de tener Terraform instalado. Puedes descargarlo desde [aquí](https://www.terraform.io/downloads).
-2. **Configurar AWS CLI**: Configura la AWS CLI con las credenciales adecuadas usando el comando `aws configure`.
-3. **Crear un Directorio de Trabajo**: Crea un nuevo directorio para tu proyecto Terraform.
+Primero, clona el repositorio GitHub que contiene la configuración de Terraform para este tutorial:
 
-    ```bash
-    mkdir terraform-multiple-workspaces
-    cd terraform-multiple-workspaces
-    ```
+```bash
+git clone https://github.com/hashicorp/learn-terraform-sensitive-variables.git
+cd learn-terraform-sensitive-variables
+```
 
-### Paso 2: Definir la Configuración de Terraform
+Este repositorio define una aplicación web que incluye una VPC, un balanceador de carga, instancias EC2 y una base de datos.
 
-4. **Crear un archivo de configuración principal (`main.tf`)**: 
+### Inicializa la Configuración
 
-    ```hcl
-    provider "aws" {
-      region = "us-east-1"
-    }
+Inicia la configuración de Terraform:
 
-    locals {
-      environment   = terraform.workspace
-      bucket_name   = terraform.workspace == "prod" ? "prod-example-bucket" : "dev-example-bucket"
-      instance_type = terraform.workspace == "prod" ? "t2.small" : "t2.micro"
-    }
+```bash
+terraform init
+```
 
-    resource "aws_instance" "example" {
-      ami           = "ami-01b799c439fd5516a" # Amazon Linux 2 AMI
-      instance_type = local.instance_type
+Esto inicializa el backend y descarga los módulos necesarios.
 
-      tags = {
-        Name        = "${local.environment}-example-instance"
-        Environment = local.environment
-      }
-    }
-    ```
+### Aplica la Configuración
 
-5. **Inicializar Terraform**:
+Aplica la configuración para crear la infraestructura de ejemplo:
 
-    ```bash
-    terraform init
-    ```
+```bash
+terraform apply
+```
 
-### Paso 3: Crear y Cambiar entre Workspaces
+Responde a la solicitud de confirmación escribiendo `yes`. Esto desplegará todos los recursos definidos.
 
-6. **Listar Workspaces Disponibles**:
+## Paso 2: Refactorizar las Credenciales de la Base de Datos
 
-    ```bash
-    terraform workspace list
-    ```
+Vamos a modificar el archivo `main.tf` para eliminar las credenciales de la base de datos codificadas directamente y reemplazarlas con variables sensibles.
 
-7. **Crear un Nuevo Workspace**:
+### Declarar Variables Sensibles
 
-    ```bash
-    terraform workspace new development
-    ```
+Abre `variables.tf` y declara las variables para el nombre de usuario y la contraseña de la base de datos:
 
-8. **Cambiar a un Workspace Existente**:
+```hcl
+variable "db_username" {
+  description = "Nombre de usuario del administrador de la base de datos"
+  type        = string
+  sensitive   = true
+}
 
-    ```bash
-    terraform workspace select default
-    ```
+variable "db_password" {
+  description = "Contraseña del administrador de la base de datos"
+  type        = string
+  sensitive   = true
+}
+```
 
-### Paso 4: Desplegar Recursos en Diferentes Workspaces
+### Referenciar Variables Sensibles en `main.tf`
 
-9. **Aplicar Configuración en el Workspace `development`**:
+Actualiza el bloque `aws_db_instance.database` en `main.tf` para utilizar las variables declaradas:
 
-    ```bash
-    terraform workspace select development
-    terraform apply -auto-approve
-    ```
+```hcl
+resource "aws_db_instance" "database" {
+  allocated_storage = 5
+  engine            = "mysql"
+  instance_class    = "db.t3.micro"
+  username          = var.db_username
+  password          = var.db_password
+  db_subnet_group_name = aws_db_subnet_group.private.name
+  skip_final_snapshot = true
+}
+```
 
-    Verifica los recursos creados en la consola de AWS, asegurándote de que una instancia EC2 `t2.micro` esté presente.
+## Paso 3: Establecer Valores de Variables Sensibles
 
-10. **Aplicar Configuración en el Workspace `prod`**:
+Existen varias formas de asignar valores a las variables sensibles. Veremos dos métodos: utilizando un archivo `.tfvars` y utilizando variables de entorno.
 
-    ```bash
-    terraform workspace select prod
-    terraform apply -auto-approve
-    ```
+### Utilizar un Archivo `.tfvars`
 
-    Verifica los recursos creados en la consola de AWS, asegurándote de que una instancia EC2 `t2.small` esté presente.
+Crea un archivo llamado `secret.tfvars` para asignar valores a las variables sensibles:
 
-### Paso 5: Administrar Workspaces
+```hcl
+db_username = "admin"
+db_password = "contraseña_insegura"
+```
 
-#### Renombrar un Workspace
+Aplica los cambios usando el parámetro `-var-file`:
 
-Terraform no tiene un comando directo para renombrar workspaces, pero puedes lograrlo siguiendo estos pasos:
+```bash
+terraform apply -var-file="secret.tfvars"
+```
 
-1. **Selecciona el Workspace que quieres renombrar**:
+### Utilizar Variables de Entorno
 
-    ```bash
-    terraform workspace select old-name
-    ```
+Otra forma de proporcionar valores sensibles es mediante variables de entorno. Terraform busca en el entorno variables que coincidan con el patrón `TF_VAR_<NOMBRE_VARIABLE>`.
 
-2. **Extrae el estado actual del workspace**:
+En Linux o Mac:
 
-    ```bash
-    terraform state pull >old-name.tfstate
-    ```
+```bash
+export TF_VAR_db_username="admin"
+export TF_VAR_db_password="otra_contraseña_insegura"
+```
 
-3. **Crea un nuevo Workspace con el nuevo nombre**:
+En Windows PowerShell:
 
-    ```bash
-    terraform workspace new new-name
-    ```
+```powershell
+$env:TF_VAR_db_username="admin"
+$env:TF_VAR_db_password="otra_contraseña_insegura"
+```
 
-4. **Empuja el estado al nuevo workspace**:
+Aplica la configuración nuevamente:
 
-    ```bash
-    terraform state push old-name.tfstate
-    ```
+```bash
+terraform apply
+```
 
-5. **Verifica el estado del nuevo workspace**:
+## Paso 4: Referenciar Variables Sensibles
 
-    ```bash
-    terraform show
-    ```
+Al usar variables sensibles en tu configuración, Terraform redactará estos valores en la salida de los comandos y archivos de registro. Intenta referenciar estas variables en una salida.
 
-6. **Elimina el viejo workspace**:
+### Añadir Variables de Salida Sensibles
 
-    ```bash
-    terraform workspace delete -force old-name
-    ```
+Añade los siguientes valores de salida en `outputs.tf`:
 
-Cada comando realiza lo siguiente:
-- `terraform workspace select old-name`: Cambia al workspace existente que deseas renombrar.
-- `terraform state pull >old-name.tfstate`: Descarga el estado actual del workspace en un archivo.
-- `terraform workspace new new-name`: Crea un nuevo workspace con el nombre deseado.
-- `terraform state push old-name.tfstate`: Sube el estado del viejo workspace al nuevo.
-- `terraform show`: Verifica que el estado en el nuevo workspace es correcto.
-- `terraform workspace delete -force old-name`: Elimina el viejo workspace.
+```hcl
+output "db_connect_string" {
+  description = "Cadena de conexión a la base de datos MySQL"
+  value       = "Server=${aws_db_instance.database.address}; Database=ExampleDB; Uid=${var.db_username}; Pwd=${var.db_password}"
+  sensitive   = true
+}
+```
 
-#### Eliminar un Workspace
+Aplica este cambio:
 
-1. **Destruir Recursos en el Workspace**: Antes de eliminar un workspace, debes destruir todos los recursos asociados con él para evitar problemas futuros.
+```bash
+terraform apply
+```
 
-    ```bash
-    terraform workspace select development
-    terraform destroy -auto-approve
-    ```
+## Paso 5: Manejar Valores Sensibles en el Archivo de Estado
 
-    Esto destruirá todos los recursos creados en el workspace `development`.
+Cuando ejecutas comandos de Terraform con un archivo de estado local, Terraform almacena el estado como texto plano, incluyendo los valores sensibles. 
 
-2. **Eliminar el Workspace**: Una vez que todos los recursos han sido destruidos, puedes proceder a eliminar el workspace.
+Abre el archivo `terraform.tfstate` y busca las credenciales para ver cómo se almacenan.
 
-    ```bash
-    terraform workspace select default
-    terraform workspace delete development
-    ```
+```bash
+grep "password" terraform.tfstate
+```
 
-    Si intentas eliminar un workspace que todavía tiene recursos asociados, recibirás un error como el siguiente:
+> **Nota**: Si tu sistema no tiene el comando `grep`, abre el archivo `terraform.tfstate` en tu editor de texto y busca "password".
 
-    ```plaintext
-    Error: Workspace is not empty
-    Workspace "development" is currently tracking the following resource instances:
-      - aws_instance.example
+## Paso 6: Limpiar la Infraestructura
 
-    Deleting this workspace would cause Terraform to lose track of any associated remote objects, which would then require you to delete them manually outside of Terraform. You should destroy these objects with Terraform before deleting the workspace.
+Destruye la infraestructura que creaste en este tutorial para evitar cargos adicionales:
 
-    If you want to delete this workspace anyway, and have Terraform forget about these managed objects, use the -force option to disable this safety check.
-    ```
+```bash
+terraform destroy
+```
 
-    Si estás seguro de que quieres eliminar el workspace y manejar manualmente cualquier recurso residual, puedes usar la opción `-force`:
+Responde a la solicitud de confirmación con `yes`.
 
-    ```bash
-    terraform workspace delete -force development
-    ```
+---
 
-### Paso 6: Limpieza de Recursos
+## Consideraciones Finales
 
-13. **Destruir Recursos en un Workspace**:
+- **No almacenes archivos `.tfvars` con valores sensibles en el control de versiones.**
+- **Utiliza la encriptación para proteger el archivo de estado.** HCP Terraform y Terraform Enterprise encriptan todos los valores de las variables antes de almacenarlos.
+- **Considera el uso de HashiCorp Vault** para gestionar y asegurar el acceso a tokens, contraseñas y otros valores sensibles.
 
-    ```bash
-    terraform workspace select prod
-    terraform destroy -auto-approve
-    ```
+Terraform facilita la gestión segura de la infraestructura, pero es crucial manejar adecuadamente la información sensible para mantener la seguridad y la integridad de tu entorno.
 
-14. **Eliminar todos los Workspaces**:
-
-    ```bash
-    terraform workspace select default
-    terraform workspace delete prod
-    terraform workspace delete dev
-    ```
-
-## Etiquetas de Recursos
-
-- **Etiqueta Name**:
-  - En el workspace `prod`: `prod-example-instance`
-  - En el workspace `dev`: `dev-example-instance`
-- **Etiqueta Environment**:
-  - En ambos workspaces (`prod` y `dev`): El valor es el nombre del workspace (es decir, `prod` o `dev`).
-
+¡Ahora estás listo para proteger tus variables sensibles en Terraform!
